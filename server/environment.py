@@ -1,175 +1,208 @@
-import uuid
 import random
-from openenv_core.env_server.interfaces import Environment
+import re
+from openenv.core.env_server import Environment
 from models import DocAction, DocObservation, DocState
 
 
-# ── The 3 tasks (easy → medium → hard) ───────────────────────────────────────
-
 TASKS = {
-    "easy": {
-        "code": """\
-def add_numbers(a: int, b: int) -> int:
-    return a + b
-""",
-        "hint": "Describe what this function does, its parameters, and what it returns.",
-        "required_keywords": ["param", "return", "int", "add"],
-        "description": "Simple function with two inputs",
-    },
-
-    "medium": {
-        "code": """\
-class BankAccount:
-    def __init__(self, owner: str, balance: float = 0.0):
-        self.owner = owner
-        self.balance = balance
-
-    def deposit(self, amount: float) -> None:
-        self.balance += amount
-
-    def withdraw(self, amount: float) -> None:
-        if amount > self.balance:
-            raise ValueError("Insufficient funds")
-        self.balance -= amount
-""",
-        "hint": "Document the class, __init__, deposit, and withdraw. Include the ValueError.",
-        "required_keywords": ["param", "raises", "owner", "balance", "deposit", "withdraw"],
-        "description": "Class with multiple methods and error handling",
-    },
-
-    "hard": {
-        "code": """\
-import asyncio
-from functools import wraps
-
-
-def retry(max_attempts: int = 3, delay: float = 1.0):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            for attempt in range(max_attempts):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == max_attempts - 1:
-                        raise
-                    await asyncio.sleep(delay * (2 ** attempt))
-        return wrapper
-    return decorator
-""",
-        "hint": "Explain the retry decorator, its parameters, exponential backoff, and async behavior.",
-        "required_keywords": ["param", "decorator", "async", "retry", "attempts", "backoff"],
-        "description": "Async decorator with exponential backoff",
-    },
+    "easy": [
+        {
+            "code": "def add(a: int, b: int) -> int:\n    return a + b",
+            "keywords": ["add", "sum", "parameters", "returns", "int"],
+            "hint": "Describe what the function does, its parameters, and return value.",
+        },
+        {
+            "code": "def multiply(x: float, y: float) -> float:\n    return x * y",
+            "keywords": ["multiply", "product", "parameters", "returns", "float"],
+            "hint": "Explain the multiplication, parameter types, and return type.",
+        },
+        {
+            "code": "def greet(name: str) -> str:\n    return f'Hello, {name}!'",
+            "keywords": ["greet", "name", "string", "returns", "hello"],
+            "hint": "Describe the greeting function and its string formatting.",
+        },
+        {
+            "code": "def is_even(n: int) -> bool:\n    return n % 2 == 0",
+            "keywords": ["even", "check", "boolean", "returns", "modulo"],
+            "hint": "Explain what the function checks and the return type.",
+        },
+    ],
+    "medium": [
+        {
+            "code": (
+                "class BankAccount:\n"
+                "    def __init__(self, owner: str, balance: float = 0.0):\n"
+                "        self.owner = owner\n"
+                "        self.balance = balance\n\n"
+                "    def deposit(self, amount: float) -> float:\n"
+                "        self.balance += amount\n"
+                "        return self.balance\n\n"
+                "    def withdraw(self, amount: float) -> float:\n"
+                "        if amount > self.balance:\n"
+                "            raise ValueError('Insufficient funds')\n"
+                "        self.balance -= amount\n"
+                "        return self.balance"
+            ),
+            "keywords": ["bank", "account", "deposit", "withdraw", "balance", "owner", "raises", "ValueError"],
+            "hint": "Document the class, constructor, and each method. Note the ValueError.",
+        },
+        {
+            "code": (
+                "class Stack:\n"
+                "    def __init__(self):\n"
+                "        self._items = []\n\n"
+                "    def push(self, item) -> None:\n"
+                "        self._items.append(item)\n\n"
+                "    def pop(self):\n"
+                "        if not self._items:\n"
+                "            raise IndexError('pop from empty stack')\n"
+                "        return self._items.pop()\n\n"
+                "    def peek(self):\n"
+                "        return self._items[-1] if self._items else None"
+            ),
+            "keywords": ["stack", "push", "pop", "peek", "raises", "IndexError", "LIFO"],
+            "hint": "Document the data structure, all methods, and exception cases.",
+        },
+    ],
+    "hard": [
+        {
+            "code": (
+                "import asyncio\n"
+                "from functools import wraps\n\n"
+                "def retry(max_attempts: int = 3, backoff: float = 1.0):\n"
+                "    def decorator(func):\n"
+                "        @wraps(func)\n"
+                "        async def wrapper(*args, **kwargs):\n"
+                "            for attempt in range(max_attempts):\n"
+                "                try:\n"
+                "                    return await func(*args, **kwargs)\n"
+                "                except Exception as e:\n"
+                "                    if attempt == max_attempts - 1:\n"
+                "                        raise\n"
+                "                    await asyncio.sleep(backoff * (2 ** attempt))\n"
+                "        return wrapper\n"
+                "    return decorator"
+            ),
+            "keywords": ["retry", "async", "decorator", "backoff", "exponential", "attempts", "raises", "exception"],
+            "hint": "Explain the decorator pattern, async behavior, and exponential backoff strategy.",
+        },
+        {
+            "code": (
+                "from contextlib import asynccontextmanager\n"
+                "from typing import AsyncGenerator\n\n"
+                "@asynccontextmanager\n"
+                "async def managed_resource(name: str, timeout: float = 30.0) -> AsyncGenerator:\n"
+                "    resource = await acquire(name, timeout)\n"
+                "    try:\n"
+                "        yield resource\n"
+                "    finally:\n"
+                "        await resource.release()"
+            ),
+            "keywords": ["context", "manager", "async", "resource", "acquire", "release", "timeout", "generator"],
+            "hint": "Document the async context manager, resource lifecycle, and cleanup guarantees.",
+        },
+    ],
 }
 
+# patterns we look for to check if the doc has some structure
+STRUCTURE_PATTERNS = [
+    r"\bargs\b", r"\bparameters?\b", r"\breturns?\b",
+    r"\braises?\b", r"\bexample",
+]
 
-# ── Environment class ─────────────────────────────────────────────────────────
 
-class DocEnvironment(Environment):
-    """
-    API Documentation Generator Environment.
+def score_doc(doc, keywords):
+    """Score a doc on three axes: keywords (40%), length (40%), structure (20%)."""
+    doc_lower = doc.lower()
 
-    An AI agent receives a Python code snippet and must write
-    clear, accurate documentation for it. The grader checks
-    completeness, keyword coverage, and structure.
-    """
+    kw_hits = sum(1 for kw in keywords if kw.lower() in doc_lower)
+    kw_score = kw_hits / max(len(keywords), 1)
+
+    word_count = len(doc.split())
+    len_score = min(word_count / 30, 1.0)
+
+    struct_hits = sum(1 for p in STRUCTURE_PATTERNS if re.search(p, doc_lower))
+    struct_score = struct_hits / len(STRUCTURE_PATTERNS)
+
+    total = 0.4 * kw_score + 0.4 * len_score + 0.2 * struct_score
+    return {
+        "keyword": round(kw_score, 3),
+        "length": round(len_score, 3),
+        "structure": round(struct_score, 3),
+        "total": round(total, 3),
+    }
+
+
+class APIDocEnv(Environment):
 
     def __init__(self):
-        super().__init__(transform=None)
-        self._state = DocState()
-        self._current_level = "easy"
+        super().__init__()
+        self.state_data = DocState()
+        self.current = None
+        self.level = "easy"
 
-    # ── reset() ──────────────────────────────────────────────────────────────
-
-    def reset(self, **kwargs) -> DocObservation:
-        """Start a new episode. Picks a task level randomly."""
-        task_level = kwargs.get("task_level")
-        episode_id = kwargs.get("episode_id")
-
-        self._current_level = task_level or random.choice(["easy", "medium", "hard"])
-        task = TASKS[self._current_level]
-
-        self._state = DocState(
-            episode_id=episode_id or str(uuid.uuid4()),
-            step_count=0,
-            current_task=self._current_level,
-            max_steps=1,
-        )
+    def reset(self, **kwargs):
+        self.state_data = DocState()
+        level = kwargs.get("level", random.choice(list(TASKS.keys())))
+        self.level = level
+        self.current = random.choice(TASKS[level])
 
         return DocObservation(
             done=False,
-            reward=None,
-            code_snippet=task["code"],
-            task_level=self._current_level,
-            hint=task["hint"],
-            feedback="",
+            reward=0.0,
+            code_snippet=self.current["code"],
+            task_level=level,
+            hint=self.current["hint"],
+            expected_keywords=self.current["keywords"],
+            feedback="Generate documentation for this API.",
         )
 
-    # ── step() ───────────────────────────────────────────────────────────────
+    def step(self, action: DocAction, **kwargs):
+        if self.current is None:
+            return DocObservation(
+                done=True, reward=-1.0,
+                code_snippet="", task_level=self.level,
+                hint="", expected_keywords=[],
+                feedback="Call reset() first.",
+            )
 
-    def step(self, action: DocAction) -> DocObservation:
-        """Grade the agent's documentation. Each episode is one step."""
-        self._state.step_count += 1
-        task = TASKS[self._current_level]
+        doc = action.generated_doc or ""
+        if not isinstance(doc, str) or not doc.strip():
+            return DocObservation(
+                done=True, reward=-1.0,
+                code_snippet=self.current["code"],
+                task_level=self.level,
+                hint=self.current["hint"],
+                expected_keywords=self.current["keywords"],
+                feedback="Empty or invalid documentation.",
+            )
 
-        score, feedback = self._grade(
-            docs=action.documentation,
-            required_keywords=task["required_keywords"],
-            task_level=self._current_level,
+        scores = score_doc(doc, self.current["keywords"])
+        reward = scores["total"]
+
+        self.state_data.total_reward += reward
+        self.state_data.step_count += 1
+
+        matched = [kw for kw in self.current["keywords"] if kw.lower() in doc.lower()]
+        missed = [kw for kw in self.current["keywords"] if kw.lower() not in doc.lower()]
+
+        feedback = (
+            f"Score: {reward:.2f}/1.00 | "
+            f"Keywords ({scores['keyword']:.0%}): matched {matched}, missed {missed} | "
+            f"Length ({scores['length']:.0%}): {len(doc.split())} words | "
+            f"Structure ({scores['structure']:.0%})"
         )
 
         return DocObservation(
             done=True,
-            reward=score,
-            code_snippet=task["code"],
-            task_level=self._current_level,
-            hint=task["hint"],
+            reward=round(reward, 2),
+            code_snippet=self.current["code"],
+            task_level=self.level,
+            hint=self.current["hint"],
+            expected_keywords=self.current["keywords"],
             feedback=feedback,
         )
 
-    # ── state ────────────────────────────────────────────────────────────────
-
     @property
-    def state(self) -> DocState:
-        """Return episode metadata."""
-        return self._state
-
-    # ── grader ───────────────────────────────────────────────────────────────
-
-    def _grade(self, docs: str, required_keywords: list, task_level: str):
-        """
-        Score documentation on 3 axes:
-          40% — length (is it detailed enough?)
-          40% — keyword coverage (does it mention important concepts?)
-          20% — structure (does it have Args/Returns sections?)
-
-        Returns (score: float 0.0–1.0, feedback: str)
-        """
-        if not docs or len(docs.strip()) < 20:
-            return 0.0, "Documentation is too short or empty."
-
-        docs_lower = docs.lower()
-        breakdown = []
-
-        # ── 40%: Length score ─────────────────────────────
-        min_length = {"easy": 80, "medium": 200, "hard": 300}[task_level]
-        length_score = min(len(docs.strip()) / min_length, 1.0) * 0.4
-        breakdown.append(f"Length: {length_score:.2f}/0.40")
-
-        # ── 40%: Keyword coverage ─────────────────────────
-        hits = [kw for kw in required_keywords if kw in docs_lower]
-        keyword_score = (len(hits) / len(required_keywords)) * 0.4
-        missed = [kw for kw in required_keywords if kw not in docs_lower]
-        breakdown.append(f"Keywords: {keyword_score:.2f}/0.40 (missing: {missed or 'none'})")
-
-        # ── 20%: Structure ────────────────────────────────
-        structure_words = ["args:", "arguments:", "returns:", "raises:", "example:", "param", ":param", "parameters"]
-        has_structure = any(w in docs_lower for w in structure_words)
-        structure_score = 0.2 if has_structure else 0.0
-        breakdown.append(f"Structure: {structure_score:.2f}/0.20")
-
-        total = round(min(length_score + keyword_score + structure_score, 1.0), 2)
-        feedback = f"Score {total:.2f} | " + " | ".join(breakdown)
-
-        return total, feedback
+    def state(self):
+        return self.state_data

@@ -1,75 +1,75 @@
 # API Documentation Generator — OpenEnv Environment
 
-An RL environment where an AI agent reads Python code and must write
-accurate, structured documentation. Built for the Meta PyTorch × Scaler OpenEnv Hackathon.
+RL environment where an AI agent reads Python code and writes documentation for it.  
+Built for Meta PyTorch × Scaler OpenEnv Hackathon.
 
-## What It Does
+## How it works
 
-The agent receives a Python code snippet and writes documentation for it.
-A grader scores the output from 0.0 to 1.0 based on:
-- **Length** (40%) — is it detailed enough?
-- **Keyword coverage** (40%) — does it mention key concepts?
-- **Structure** (20%) — does it use Args/Returns/Raises sections?
+The agent gets a Python code snippet and writes a docstring. The grader scores it 0–1 based on:
+- **Keyword coverage** (40%) — mentions the right concepts
+- **Length** (40%) — detailed enough  
+- **Structure** (20%) — has Args/Returns/Raises sections
 
-## Task Levels
+## Task levels
 
-| Level  | Task                          | Min score needed |
-|--------|-------------------------------|-----------------|
-| Easy   | Simple two-parameter function | 0.0 – 1.0       |
-| Medium | Class with deposit/withdraw   | 0.0 – 1.0       |
-| Hard   | Async retry decorator         | 0.0 – 1.0       |
+| Level  | What you get                    |
+|--------|---------------------------------|
+| Easy   | Simple functions (`add`, `is_even`) |
+| Medium | Classes with methods (`BankAccount`, `Stack`) |
+| Hard   | Async decorators & context managers |
 
-## Action Space
-
-```python
-DocAction(
-    documentation: str  # The docstring the agent wrote
-)
-```
-
-## Observation Space
+## Action & Observation
 
 ```python
+# what the agent sends
+DocAction(generated_doc="your docstring here")
+
+# what the agent receives
 DocObservation(
-    code_snippet: str   # Python code to document
-    task_level: str     # "easy", "medium", or "hard"
-    hint: str           # What to focus on
-    feedback: str       # After grading: score breakdown
-    done: bool
-    reward: float       # 0.0 to 1.0
+    code_snippet="def add(a, b): ...",
+    task_level="easy",
+    hint="Describe params and return value",
+    expected_keywords=["add", "sum", "returns"],
+    feedback="Score: 0.85/1.00 | ...",
+    done=True,
+    reward=0.85,
 )
 ```
 
-## Quick Start
+## Quick start
 
 ```python
-from api_doc_env import DocEnv, DocAction
+from client import APIDocClient
+from server.models import DocAction
 
-with DocEnv(base_url="https://YOUR_USERNAME-api-doc-env.hf.space").sync() as env:
-    result = env.reset()
+with APIDocClient(base_url="https://YOUR-SPACE.hf.space").sync() as env:
+    result = env.reset(level="easy")
     print(result.observation.code_snippet)
 
-    result = env.step(DocAction(documentation="Your docs here..."))
+    result = env.step(DocAction(generated_doc="Your docs here..."))
     print(f"Score: {result.reward}")
 ```
 
-## Running the Inference Script
+## Running inference
 
 ```bash
 export API_BASE_URL="https://api-inference.huggingface.co/v1"
 export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
-export HF_TOKEN="your_token_here"
-export ENV_URL="https://YOUR_USERNAME-api-doc-env.hf.space"
+export HF_TOKEN="your_token"
+export ENV_URL="https://YOUR-SPACE.hf.space"
 
 python inference.py
 ```
 
-## Local Development
+## Local dev
 
 ```bash
 pip install -r requirements.txt
-uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload
+cd server
+uvicorn app:app --reload
 ```
+
+Then open http://localhost:8000 — the web UI is at `/web`.
 
 ## Team
 
