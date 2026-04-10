@@ -1,8 +1,11 @@
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))  
+
 import json
 import gradio as gr
 from openenv.core.env_server import create_web_interface_app
-from .environment import APIDocEnv, score_doc
-from .models import DocAction, DocObservation
+from environment import APIDocEnv, score_doc     
+from models import DocAction, DocObservation       
 
 CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
