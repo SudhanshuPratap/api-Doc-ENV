@@ -2,3 +2,5 @@ openenv-core
 fastapi
 uvicorn
 pydantic
+gradio
+openai
