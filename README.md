@@ -3,7 +3,7 @@ title: API Doc Env
 emoji: 📚
 colorFrom: blue
 colorTo: green
-sdk: streamlit
+sdk: gradio
 sdk_version: "1.28.1"
 app_file: server/app.py
 pinned: false
