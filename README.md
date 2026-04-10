@@ -1,3 +1,17 @@
+---
+title: API Doc Env
+emoji: 📚
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.28.1"
+app_file: server/app.py
+pinned: false
+---
+
+# API Documentation Environment
+
+Your app description here.
 # API Documentation Generator — OpenEnv Environment
 
 RL environment where an AI agent reads Python code and writes documentation for it.  
