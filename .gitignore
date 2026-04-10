@@ -1,4 +1,21 @@
+# Python virtual environment
 .venv/
-server/.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python cache and compiled files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environment variables (if any local .env file)
+.env
+
+# IDE settings
+.vscode/
+.idea/
